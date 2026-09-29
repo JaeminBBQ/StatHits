@@ -2,7 +2,10 @@
 
 Follows docs/ARCHITECTURE.md -> "Ingestion design". Only registered members'
 data is ever stored; a match is committed as soon as it is processed so
-partial progress survives a crash.
+partial progress survives a crash. A member's poll cursor (`last_polled_at_ms`)
+only advances when every listed match was either ingested or recorded as seen:
+retryable failures hold the cursor so the failed matches are re-listed on the
+next poll.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from sqlalchemy.orm import Session
 from didyouhit.models import Match, Member, MemberGame
 from didyouhit.parsing import MatchSummary, parse_match_summary, parse_member_game
 from didyouhit.riot.client import RiotClient
-from didyouhit.riot.errors import RiotNotFoundError, RiotUnavailableError
+from didyouhit.riot.errors import RiotAuthError, RiotError, RiotNotFoundError, RiotUnavailableError
 
 logger = logging.getLogger("didyouhit.ingest")
 
@@ -27,7 +30,12 @@ DEFAULT_BACKFILL_DAYS = 7
 
 @dataclass
 class IngestStats:
-    """Counters for one ingestion pass; instances can be summed."""
+    """Counters for one ingestion pass; instances can be summed.
+
+    `errors` counts every failure; `retryable_failures` counts the subset that
+    was neither ingested nor recorded as seen, i.e. the matches that must be
+    retried and therefore hold the poll cursor.
+    """
 
     members: int = 0
     ids_listed: int = 0
@@ -35,6 +43,7 @@ class IngestStats:
     timelines_fetched: int = 0
     member_games_created: int = 0
     errors: int = 0
+    retryable_failures: int = 0
 
     def __add__(self, other: IngestStats) -> IngestStats:
         return IngestStats(
@@ -44,6 +53,7 @@ class IngestStats:
             timelines_fetched=self.timelines_fetched + other.timelines_fetched,
             member_games_created=self.member_games_created + other.member_games_created,
             errors=self.errors + other.errors,
+            retryable_failures=self.retryable_failures + other.retryable_failures,
         )
 
 
@@ -168,6 +178,34 @@ def _create_member_games(
     return created
 
 
+def _check_key_after_403(client: RiotClient, member: Member) -> None:
+    """One cheap listing call to tell a dead key from a forbidden match.
+
+    Raises RiotAuthError if the key is dead; any other error propagates and is
+    treated by callers as an unresolved 403.
+    """
+    client.get_match_ids(member.puuid, member.platform, start_time_s=None, count=1)
+
+
+def _resolve_403(client: RiotClient, member: Member, match_id: str, stats: IngestStats) -> bool:
+    """Resolve a 403 on match data by re-checking the key.
+
+    Returns True when the key is fine (the match itself is forbidden and the
+    caller records it as seen), False when the re-check failed (a retryable,
+    cursor-holding failure). Raises RiotAuthError when the key is dead.
+    """
+    try:
+        _check_key_after_403(client, member)
+    except RiotAuthError:
+        raise
+    except RiotError:
+        stats.retryable_failures += 1
+        stats.errors += 1
+        logger.warning("match %s: 403 unresolved, will retry next poll", match_id)
+        return False
+    return True
+
+
 def _ingest_new_match(
     session: Session,
     client: RiotClient,
@@ -186,9 +224,24 @@ def _ingest_new_match(
         logger.warning("match %s: not found, recording as seen", match_id)
         session.commit()
         return
+    except RiotAuthError as error:
+        if error.status != 403:
+            raise
+        if _resolve_403(client, member, match_id, stats):
+            stats.errors += 1
+            logger.warning("match %s: forbidden (403), recording as seen", match_id)
+            _record_seen(session, match_id, member.platform, None, now_ms=now_ms)
+            session.commit()
+        return
     except RiotUnavailableError:
+        stats.retryable_failures += 1
         stats.errors += 1
         logger.warning("match %s: fetch failed, will retry next poll", match_id)
+        return
+    except RiotError:
+        stats.retryable_failures += 1
+        stats.errors += 1
+        logger.warning("match %s: unexpected fetch error, will retry next poll", match_id)
         return
     stats.matches_fetched += 1
     summary = parse_match_summary(match, min_duration_s=min_duration_s)
@@ -200,9 +253,25 @@ def _ingest_new_match(
             summary = replace(summary, is_valid=False)
             stats.errors += 1
             logger.warning("timeline %s: not found, recording match as invalid", match_id)
+        except RiotAuthError as error:
+            if error.status != 403:
+                raise
+            if _resolve_403(client, member, match_id, stats):
+                summary = replace(summary, is_valid=False)
+                stats.errors += 1
+                logger.warning("match %s: forbidden (403), recording as seen", match_id)
+                _record_seen(session, match_id, member.platform, summary, now_ms=now_ms)
+                session.commit()
+            return
         except RiotUnavailableError:
+            stats.retryable_failures += 1
             stats.errors += 1
             logger.warning("timeline %s: fetch failed, will retry next poll", match_id)
+            return
+        except RiotError:
+            stats.retryable_failures += 1
+            stats.errors += 1
+            logger.warning("timeline %s: unexpected fetch error, will retry next poll", match_id)
             return
         else:
             stats.timelines_fetched += 1
@@ -217,6 +286,7 @@ def _backfill_member_game(
     client: RiotClient,
     member: Member,
     match_id: str,
+    match_row: Match,
     *,
     stats: IngestStats,
 ) -> None:
@@ -224,7 +294,17 @@ def _backfill_member_game(
     try:
         match = client.get_match(match_id, member.platform)
         timeline = client.get_timeline(match_id, member.platform)
-    except (RiotNotFoundError, RiotUnavailableError):
+    except RiotAuthError as error:
+        if error.status != 403:
+            raise
+        if _resolve_403(client, member, match_id, stats):
+            match_row.is_valid = False
+            stats.errors += 1
+            logger.warning("match %s: forbidden (403), recording as seen", match_id)
+            session.commit()
+        return
+    except RiotError:
+        stats.retryable_failures += 1
         stats.errors += 1
         logger.warning("match %s: backfill fetch failed, will retry next poll", match_id)
         return
@@ -266,7 +346,7 @@ def _ingest_match_id(
         and match_row.is_valid
         and not _has_member_game(session, member.id, match_id)
     ):
-        _backfill_member_game(session, client, member, match_id, stats=stats)
+        _backfill_member_game(session, client, member, match_id, match_row, stats=stats)
     # else: already seen and covered, nothing to do
 
 
@@ -286,14 +366,18 @@ def ingest_member(
                 member.puuid, member.platform, start_time_s=_start_time_s(member, now_ms=now_ms)
             )
         )
+    except RiotAuthError:
+        raise  # a 401/403 on listing means the key is dead; abort everything
     except RiotUnavailableError:
         stats.errors += 1
         logger.warning("member %s: match listing unavailable, will retry next poll", member.id)
         return stats
+    except RiotError:
+        stats.errors += 1
+        logger.warning("member %s: match listing failed, will retry next poll", member.id)
+        return stats
     stats.members = 1
     stats.ids_listed = len(match_ids)
-    member.last_polled_at_ms = now_ms
-    session.commit()
     for match_id in match_ids:
         _ingest_match_id(
             session,
@@ -304,15 +388,19 @@ def ingest_member(
             min_duration_s=min_duration_s,
             stats=stats,
         )
+    if stats.retryable_failures == 0:
+        member.last_polled_at_ms = now_ms
+        session.commit()
     logger.info(
         "member %s: %d ids listed, %d matches fetched, %d timelines fetched, "
-        "%d games created, %d errors",
+        "%d games created, %d errors, %d retryable",
         member.id,
         stats.ids_listed,
         stats.matches_fetched,
         stats.timelines_fetched,
         stats.member_games_created,
         stats.errors,
+        stats.retryable_failures,
     )
     return stats
 

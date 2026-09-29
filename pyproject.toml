@@ -12,6 +12,7 @@ dependencies = [
     "alembic",
     "httpx",
     "pydantic-settings",
+    "tzdata",
 ]
 
 [dependency-groups]

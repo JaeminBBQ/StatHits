@@ -1,14 +1,14 @@
 # To Claude
-**Task:** T002 (riot-client-and-ingestion)
+**Task:** T002a (ingest-cursor-and-403-fix) + T003 (weeks-and-boards)
 **Status:** done
-**Report:** handoffs/reports/T002-report.md
-**Updated:** 2026-09-28 17:53
+**Report:** handoffs/reports/T002a-report.md, handoffs/reports/T003-report.md
+**Updated:** 2026-09-28 18:19
 
 ## In one paragraph
-Built the `riot/` package (platform routing copied from the Phase 1 probe, typed errors, `RiotClient` with injectable clock/sleep, sliding-window rate limits, Retry-After and backoff retries, `calls` counter), the ingestion service (`add_member`, `ingest_member`, `ingest_all`, summable `IngestStats`, per-match commits, 1h poll overlap, 7-day backfill), `backfill_days` in Settings, and the `add-member` / `members` / `ingest` CLI subcommands. All seven acceptance criteria pass: 40 tests (including every listed test and T001's), ruff check + format clean, the empty-key exit-2 path verified against a migrated throwaway DB, no hardcoded keys in `src`, and no changes to forbidden paths.
+T002a: the poll cursor now advances only after every listed match is ingested or recorded as seen — retryable failures (unavailable, unexpected statuses, failed backfill re-fetches, unresolved 403s) hold it, so failed matches are re-listed next poll; match-level 403s trigger a one-call key re-check that aborts only on a dead key and otherwise records the match as seen, while 401s abort immediately and listing 401/403 still abort. T003: DST-aware local-Monday week math (`weeks.py`, with `tzdata` added) and the full boards layer (`boards.py`): the PRODUCT.md board registry, pure `compute_boards` with best-game/tie/per-minute/total rules, and `load_week` / `weekly_boards` / `past_weeks` / `member_history`. All acceptance criteria for both tasks pass: 68 tests, ruff clean, no banned wording in `src`, no forbidden-path changes.
 
 ## Needs Claude's attention
-1. Unexpected HTTP statuses (e.g. 400) raise a new base `RiotError` immediately and stop the run — alternatively they could be counted and skipped like `RiotUnavailableError`. Which do you want?
-2. Backfill re-fetch failures (member joined after a match was ingested) count an error and retry next poll, rather than flipping the shared `matches` row to invalid. OK?
-3. `add_member` on an existing member keeps the old `platform`/`backfill_from_ms`. Should re-adding reset the backfill window?
-4. Client error messages include the member's own PUUID (it's in the request path). Allowed per the "no non-member PUUIDs" rule; flagging in case you'd rather strip it.
+1. T002a backfill-403: I apply "record as seen" to the existing `matches` row (flip `is_valid=False`). Is that right, or should the row stay untouched and retry next poll?
+2. T003 per-minute labels/units are my wording ("Most damage per minute", dmg/min, HP/min, s/min) — right for the T004 UI?
+3. `member_history` returns the board-focused `GameRow`; the member page also wants augments and full stats. Have T004 query `member_games` directly where it needs more, or widen `GameRow` now?
+4. T002's board row still says "rework → T002a" — the rework is delivered here; mark T002 done when you're happy with T002a.

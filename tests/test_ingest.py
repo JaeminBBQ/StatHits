@@ -215,7 +215,8 @@ def test_later_member_backfills_existing_match(session, api_key, clock, sleeper)
 
 
 def test_match_404_recorded_as_seen_and_not_retried(session, api_key, clock, sleeper):
-    session.add(make_member("fixture-puuid-01"))
+    member = make_member("fixture-puuid-01")
+    session.add(member)
     session.commit()
     with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
         mock_listing(router, "fixture-puuid-01", ["NA1_9999999999"])
@@ -228,6 +229,7 @@ def test_match_404_recorded_as_seen_and_not_retried(session, api_key, clock, sle
             session, client, now_ms=2_000_000_000_000, min_duration_s=MIN_DURATION_S
         )
         assert stats1.errors == 1
+        assert stats1.retryable_failures == 0  # recorded failures don't hold the cursor
         row = session.get(Match, "NA1_9999999999")
         assert row is not None
         assert row.is_arena is False
@@ -239,10 +241,14 @@ def test_match_404_recorded_as_seen_and_not_retried(session, api_key, clock, sle
         assert missing_route.call_count == 1  # never fetched again
 
     assert stats2.errors == 0
+    assert (
+        member.last_polled_at_ms == 2_100_000_000_000
+    )  # cursor advanced past the 404 (run 2 to the new now)
 
 
 def test_timeline_503s_skip_match_and_retry_next_poll(session, api_key, clock, sleeper):
-    session.add(make_member("fixture-puuid-01"))
+    member = make_member("fixture-puuid-01")
+    session.add(member)
     session.commit()
     with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
         mock_listing(router, "fixture-puuid-01", [ARENA_MATCH_ID])
@@ -256,13 +262,16 @@ def test_timeline_503s_skip_match_and_retry_next_poll(session, api_key, clock, s
             session, client, now_ms=2_000_000_000_000, min_duration_s=MIN_DURATION_S
         )
         assert stats1.errors == 1
+        assert stats1.retryable_failures == 1
         assert session.get(Match, ARENA_MATCH_ID) is None
+        assert member.last_polled_at_ms is None  # cursor held
         assert timeline_route.call_count == 5
 
         stats2 = ingest_all(
             session, client, now_ms=2_100_000_000_000, min_duration_s=MIN_DURATION_S
         )
         assert stats2.errors == 1
+        assert stats2.retryable_failures == 1
         assert session.get(Match, ARENA_MATCH_ID) is None
         assert match_route.call_count == 2  # the match is fetched again on the next run
         assert timeline_route.call_count == 10
@@ -385,8 +394,12 @@ def test_no_non_member_data_persisted(session, api_key, clock, sleeper):
 
 
 def test_ingest_stats_sum():
-    total = IngestStats(members=1, ids_listed=2, matches_fetched=3, errors=4) + IngestStats(
-        members=5, ids_listed=6, timelines_fetched=7, member_games_created=8, errors=1
+    total = (
+        IngestStats(members=1, ids_listed=2, matches_fetched=3, errors=4)
+        + IngestStats(
+            members=5, ids_listed=6, timelines_fetched=7, member_games_created=8, errors=1
+        )
+        + IngestStats(retryable_failures=2)
     )
     assert total == IngestStats(
         members=6,
@@ -395,4 +408,184 @@ def test_ingest_stats_sum():
         timelines_fetched=7,
         member_games_created=8,
         errors=5,
+        retryable_failures=2,
     )
+
+
+def test_cursor_holds_on_retryable_failure_then_advances(session, api_key, clock, sleeper):
+    member = make_member("fixture-puuid-01", last_polled_at_ms=2_000_000_000_000)
+    session.add(member)
+    session.commit()
+    missing_url = "https://americas.api.riotgames.com/lol/match/v5/matches/NA1_9999999999"
+    # Run 1: the arena match ingests, the other match 503s five times.
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        mock_listing(router, "fixture-puuid-01", [ARENA_MATCH_ID, "NA1_9999999999"])
+        mock_arena_match(router)
+        failing_route = router.get(missing_url).mock(return_value=httpx.Response(503))
+        stats1 = ingest_all(
+            session,
+            RiotClient(api_key, clock=clock, sleep=sleeper),
+            now_ms=2_100_000_000_000,
+            min_duration_s=MIN_DURATION_S,
+        )
+        assert failing_route.call_count == 5
+
+    assert stats1.errors == 1
+    assert stats1.retryable_failures == 1
+    assert member.last_polled_at_ms == 2_000_000_000_000  # cursor held
+    assert session.get(Match, ARENA_MATCH_ID) is not None  # the good match still ingested
+    assert session.get(Match, "NA1_9999999999") is None
+
+    # Run 2: the failed match now works (serve the 1740 fixture under that id).
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        mock_listing(router, "fixture-puuid-01", [ARENA_MATCH_ID, "NA1_9999999999"])
+        match_route = router.get(missing_url).mock(
+            return_value=httpx.Response(200, json=load("match_1740_NA1_5634363156.json"))
+        )
+        timeline_route = router.get(f"{missing_url}/timeline").mock(
+            return_value=httpx.Response(200, json=load("timeline_1740_NA1_5634363156.json"))
+        )
+        stats2 = ingest_all(
+            session,
+            RiotClient(api_key, clock=clock, sleep=sleeper),
+            now_ms=2_200_000_000_000,
+            min_duration_s=MIN_DURATION_S,
+        )
+        assert match_route.call_count == 1
+        assert timeline_route.call_count == 1
+
+    assert stats2.errors == 0
+    assert stats2.retryable_failures == 0
+    assert member.last_polled_at_ms == 2_200_000_000_000  # cursor advanced
+    row = session.get(Match, "NA1_9999999999")
+    assert row is not None and row.is_valid is True
+    assert (
+        session.scalar(
+            select(MemberGame).where(
+                MemberGame.member_id == member.id, MemberGame.match_id == "NA1_9999999999"
+            )
+        )
+        is not None
+    )
+
+
+def test_match_403_with_valid_key_records_seen_and_continues(session, api_key, clock, sleeper):
+    member = make_member("fixture-puuid-01")
+    session.add(member)
+    session.commit()
+    forbidden_url = "https://americas.api.riotgames.com/lol/match/v5/matches/NA1_7777777777"
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        listing = mock_listing(router, "fixture-puuid-01", ["NA1_7777777777", NORMAL_MATCH_ID])
+        forbidden_route = router.get(forbidden_url).mock(return_value=httpx.Response(403))
+        router.get(NORMAL_MATCH_URL).mock(
+            return_value=httpx.Response(200, json=load("match_400_NA1_5438163867.json"))
+        )
+        client = RiotClient(api_key, clock=clock, sleep=sleeper)
+        stats1 = ingest_all(
+            session, client, now_ms=2_000_000_000_000, min_duration_s=MIN_DURATION_S
+        )
+        assert forbidden_route.call_count == 1
+        assert listing.call_count == 2  # the listing plus the key re-check
+
+        stats2 = ingest_all(
+            session, client, now_ms=2_100_000_000_000, min_duration_s=MIN_DURATION_S
+        )
+        assert forbidden_route.call_count == 1  # not requested again
+        assert listing.call_count == 3  # one more listing, no more re-checks
+
+    assert stats1.errors == 1
+    assert stats1.retryable_failures == 0
+    assert stats2.errors == 0
+    row = session.get(Match, "NA1_7777777777")
+    assert row is not None
+    assert row.is_arena is False
+    assert row.is_valid is False
+    assert session.get(Match, NORMAL_MATCH_ID) is not None  # the other match still ingested
+    assert member.last_polled_at_ms == 2_100_000_000_000  # cursor advanced (run 2 to the new now)
+
+
+def test_match_403_with_dead_key_aborts(session, api_key, clock, sleeper):
+    session.add(make_member("fixture-puuid-01"))
+    session.commit()
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        router.get(url__startswith=ids_url("fixture-puuid-01")).mock(
+            side_effect=[
+                httpx.Response(200, json=["NA1_7777777777"]),
+                httpx.Response(403),  # the key re-check
+            ]
+        )
+        router.get("https://americas.api.riotgames.com/lol/match/v5/matches/NA1_7777777777").mock(
+            return_value=httpx.Response(403)
+        )
+        with pytest.raises(RiotAuthError):
+            ingest_all(
+                session,
+                RiotClient(api_key, clock=clock, sleep=sleeper),
+                now_ms=2_000_000_000_000,
+                min_duration_s=MIN_DURATION_S,
+            )
+
+
+def test_401_on_match_raises_without_recheck(session, api_key, clock, sleeper):
+    session.add(make_member("fixture-puuid-01"))
+    session.commit()
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        listing = mock_listing(router, "fixture-puuid-01", ["NA1_7777777777"])
+        router.get("https://americas.api.riotgames.com/lol/match/v5/matches/NA1_7777777777").mock(
+            return_value=httpx.Response(401)
+        )
+        with pytest.raises(RiotAuthError):
+            ingest_all(
+                session,
+                RiotClient(api_key, clock=clock, sleep=sleeper),
+                now_ms=2_000_000_000_000,
+                min_duration_s=MIN_DURATION_S,
+            )
+        assert listing.call_count == 1  # no key re-check for a 401
+
+
+def test_unexpected_400_on_match_is_retryable(session, api_key, clock, sleeper):
+    member = make_member("fixture-puuid-01", last_polled_at_ms=2_000_000_000_000)
+    session.add(member)
+    session.commit()
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        mock_listing(router, "fixture-puuid-01", [ARENA_MATCH_ID, "NA1_8888888888"])
+        mock_arena_match(router)
+        router.get("https://americas.api.riotgames.com/lol/match/v5/matches/NA1_8888888888").mock(
+            return_value=httpx.Response(400)
+        )
+        stats = ingest_all(
+            session,
+            RiotClient(api_key, clock=clock, sleep=sleeper),
+            now_ms=2_100_000_000_000,
+            min_duration_s=MIN_DURATION_S,
+        )
+    assert stats.errors == 1
+    assert stats.retryable_failures == 1
+    assert member.last_polled_at_ms == 2_000_000_000_000  # cursor held
+    assert session.get(Match, "NA1_8888888888") is None  # not recorded
+    assert session.get(Match, ARENA_MATCH_ID) is not None  # the other match still ingested
+
+
+def test_unexpected_400_on_listing_skips_member(session, api_key, clock, sleeper):
+    member01 = make_member("fixture-puuid-01")
+    member02 = make_member("fixture-puuid-02")
+    session.add_all([member01, member02])
+    session.commit()
+    with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        router.get(url__startswith=ids_url("fixture-puuid-01")).mock(
+            return_value=httpx.Response(400)
+        )
+        mock_listing(router, "fixture-puuid-02", [ARENA_MATCH_ID])
+        mock_arena_match(router)
+        stats = ingest_all(
+            session,
+            RiotClient(api_key, clock=clock, sleep=sleeper),
+            now_ms=2_000_000_000_000,
+            min_duration_s=MIN_DURATION_S,
+        )
+    assert stats.errors == 1
+    assert stats.members == 1  # only member 02 was processed
+    assert member01.last_polled_at_ms is None  # cursor unchanged
+    assert member02.last_polled_at_ms == 2_000_000_000_000
+    assert session.scalars(select(MemberGame)).all() != []  # member 02 was ingested
