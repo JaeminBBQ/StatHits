@@ -1,0 +1,28 @@
+{% for section in sections %}
+<section class="board-section">
+  <h2>{{ section.title }}</h2>
+  <div class="board-grid">
+    {% for board in section.boards %}
+    <article class="board-card">
+      <h3>{{ board.label }}</h3>
+      {% if board.entries %}
+      <ol class="board-entries">
+        {% for entry in board.entries %}
+        <li>
+          <span class="pos">{{ entry.position }}</span>
+          <span class="who">
+            <a class="riot-id" href="/members/{{ entry.member_id }}">{{ entry.riot_id }}</a>
+            {% if entry.champion_name %}<span class="champion">{{ entry.champion_name }}</span>{% endif %}
+          </span>
+          <span class="value">{{ entry.value | board_value(board.unit) }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="empty">No games yet this week.</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}

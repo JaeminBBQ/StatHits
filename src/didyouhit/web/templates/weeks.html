@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Past weeks</h1>
+{% if weeks %}
+{% for week in weeks %}
+<section class="week-summary">
+  <h2><a href="{{ week.url }}">Week of {{ week.label }}</a></h2>
+  <table class="winners-table">
+    <thead>
+      <tr><th>Board</th><th>Winner</th><th>Value</th><th>Champion</th></tr>
+    </thead>
+    <tbody>
+      {% for board in week.boards %}
+      <tr>
+        <td>{{ board.label }}</td>
+        {% if board.winner %}
+        <td><a class="riot-id" href="/members/{{ board.winner.member_id }}">{{ board.winner.riot_id }}</a></td>
+        <td class="num">{{ board.winner.value | board_value(board.unit) }}</td>
+        <td>{{ board.winner.champion_name or "—" }}</td>
+        {% else %}
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% else %}
+<p class="empty">No past weeks yet.</p>
+{% endif %}
+{% endblock %}

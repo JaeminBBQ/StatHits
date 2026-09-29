@@ -1,0 +1,320 @@
+/* didyouhit.gg — hand-written dark theme, no frameworks. */
+
+:root {
+  --bg: #14161b;
+  --bg-elevated: #1c1f26;
+  --bg-input: #101217;
+  --text: #e6e8ee;
+  --text-dim: #a6abb8;
+  --accent: #7ea4ff;
+  --danger: #ff9c9c;
+  --number: #ffd479;
+  --border: #2c303a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-name {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  gap: 16px;
+}
+
+.site-nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--text);
+}
+
+.content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 16px 40px;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+.week-label {
+  color: var(--text-dim);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown {
+  color: var(--text-dim);
+}
+
+.board-section {
+  margin-top: 28px;
+}
+
+.board-section h2 {
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+}
+
+.board-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.board-card h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.board-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board-entries li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.board-entries li:first-child {
+  border-top: none;
+}
+
+.pos {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.who {
+  min-width: 0;
+}
+
+.riot-id {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.champion {
+  display: block;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.value {
+  color: var(--number);
+  font-weight: 700;
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--text-dim);
+  margin: 8px 0 0;
+}
+
+.week-summary {
+  margin-top: 24px;
+}
+
+.week-summary h2 {
+  font-size: 1.1rem;
+}
+
+.week-summary h2 a {
+  color: var(--text);
+}
+
+.winners-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.winners-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.winners-table th,
+.winners-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.winners-table th:first-child,
+.winners-table td:first-child {
+  padding-left: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.member-since {
+  color: var(--text-dim);
+}
+
+.joined {
+  color: var(--number);
+}
+
+.game-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.game-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+}
+
+.when {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.champion {
+  font-weight: 600;
+}
+
+.placement {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.game-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+}
+
+.game-stats div {
+  margin: 0;
+}
+
+.game-stats dt {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.game-stats dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.join-form {
+  max-width: 420px;
+}
+
+.join-form label {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--text-dim);
+}
+
+.join-form input,
+.join-form select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.join-form button {
+  padding: 8px 18px;
+  background: var(--accent);
+  color: #101217;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-error {
+  color: var(--danger);
+}
+
+.closed {
+  color: var(--text-dim);
+}
+
+.site-footer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.site-footer p {
+  margin: 0;
+}

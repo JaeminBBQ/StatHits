@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+import uvicorn
 from sqlalchemy import select
 
 from didyouhit.config import get_settings
@@ -19,6 +20,7 @@ from didyouhit.models import Member
 from didyouhit.parsing import parse_match_summary, parse_member_game
 from didyouhit.riot.client import RiotClient
 from didyouhit.riot.errors import RiotAuthError, RiotNotFoundError
+from didyouhit.web.app import create_app
 
 
 def _now_ms() -> int:
@@ -118,6 +120,12 @@ def _ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    uvicorn.run(create_app(settings), host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="didyouhit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -144,6 +152,13 @@ def main(argv: list[str] | None = None) -> int:
         "ingest", help="run one ingestion pass over all active members"
     )
     ingest_parser.set_defaults(func=_ingest)
+
+    serve_parser = subparsers.add_parser(
+        "serve", help="run the web server (uvicorn); the ingest loop follows INGEST_ENABLED"
+    )
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.set_defaults(func=_serve)
 
     args = parser.parse_args(argv)
     return args.func(args)

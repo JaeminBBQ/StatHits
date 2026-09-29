@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     min_game_duration_s: int = 300
     rate_limits: str = "20:1,100:120"
     backfill_days: int = 7
+    ingest_enabled: bool = False
+    alert_webhook_url: SecretStr | None = None
+    display_limit: int = 5
 
 
 @lru_cache

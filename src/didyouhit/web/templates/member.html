@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ member.game_name }}#{{ member.tag_line }}</h1>
+<p class="member-since">Member since {{ since }}</p>
+{% if joined %}
+<p class="joined">You're in! Your Arena games from the last 7 days will show up within ~15 minutes.</p>
+{% endif %}
+<h2>Arena games</h2>
+{% if games %}
+{% for game in games %}
+<article class="game-card">
+  <header class="game-head">
+    <span class="when">{{ game.game_end_ms | format_dt(week_tz) }}</span>
+    <span class="champion">{{ game.champion_name }}</span>
+    {% if game.placement %}<span class="placement">{{ game.placement | ordinal }} place</span>{% endif %}
+  </header>
+  <dl class="game-stats">
+    <div><dt>Damage</dt><dd class="num">{{ game.damage_to_champions | board_value("dmg") }}</dd></div>
+    <div><dt>Peak AP</dt><dd class="num">{{ game.peak_ap | board_value("AP") }}</dd></div>
+    <div><dt>Max health</dt><dd class="num">{{ game.peak_health_max | board_value("HP") }}</dd></div>
+    <div><dt>Biggest crit</dt><dd class="num">{{ game.largest_crit | board_value("dmg") }}</dd></div>
+    <div><dt>CC time</dt><dd class="num">{{ game.cc_time | board_value("s") }}</dd></div>
+    <div><dt>Augments</dt><dd>{{ game.augments | join(", ") or "—" }}</dd></div>
+  </dl>
+</article>
+{% endfor %}
+{% else %}
+<p class="empty">No games yet.</p>
+{% endif %}
+{% endblock %}

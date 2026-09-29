@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Join</h1>
+{% if closed %}
+<p class="closed">Sign-ups are closed right now.</p>
+{% else %}
+{% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+<form class="join-form" method="post" action="/join">
+  <label for="riot-id">Riot ID
+    <input id="riot-id" name="riot_id" value="{{ riot_id }}" placeholder="Name#TAG" required>
+  </label>
+  <label for="platform">Region
+    <select id="platform" name="platform">
+      {% for key, label in platforms.items() %}
+      <option value="{{ key }}"{% if key == platform %} selected{% endif %}>{{ key }} — {{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label for="invite-code">Invite code
+    <input id="invite-code" name="invite_code" value="" required>
+  </label>
+  <button type="submit">Join</button>
+</form>
+{% endif %}
+{% endblock %}
