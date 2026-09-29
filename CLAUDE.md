@@ -15,6 +15,11 @@
 4. The user tells Claude "read handoffs/TO_CLAUDE.md". Claude reads it and the report, inspects `git diff`, **runs the acceptance commands itself**, and either marks the task `done` or writes a follow-up task (`TNNN-fix-...`). Never mark done on DeepSeek's word alone.
 5. When a task is done, Claude gives the user the exact `git add/commit` command. **The user runs all commits; Claude and DeepSeek never commit.**
 
+## Discord notifications (always)
+The user may be away from the terminal. Before ending any turn where the user must act (hand off to DeepSeek, answer a question, run a commit, do a browser test), send:
+`python3 tools/notify.py --from claude --kind input "<exactly what to do, e.g. 'Tell DeepSeek: read handoffs/TO_DEEPSEEK.md'>"`
+Use `--kind done` for finished milestones and `--kind blocked` for blockers. The webhook lives in `.env` (`DISCORD_WEBHOOK_URL`); never print it. A project `Notification` hook (`.claude/settings.json`) also forwards permission prompts from either agent.
+
 What goes to DeepSeek: well-specified implementation with clear acceptance tests. What stays with Claude: decisions, specs, reviews, anything ambiguous, anything needing the API key, compliance.
 
 ## Source of truth

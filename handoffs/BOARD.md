@@ -2,8 +2,8 @@
 
 | ID | Task | Owner | Status | Depends on |
 |---|---|---|---|---|
-| T001 | Scaffold, config, DB models + migration, pure parsing of match/timeline → records | DeepSeek | ready | — |
-| T002 | Riot API client (rate limits, retries, routing) + ingestion service + CLI (`add-member`, `ingest`) | DeepSeek | planned | T001 |
+| T001 | Scaffold, config, DB models + migration, pure parsing of match/timeline → records | DeepSeek | done | — |
+| T002 | Riot API client (rate limits, retries, routing) + ingestion service + CLI (`add-member`, `ingest`) | DeepSeek | ready | T001 |
 | T003 | Week windows + board definitions/queries + past-week winners | DeepSeek | planned | T001 |
 | T004 | Web UI: this week, past weeks, member page, join page, footer; background ingest loop | DeepSeek | planned | T002, T003 |
 | T005 | First live run with a real key; data sanity check against the user's games | Claude + user | planned | T002 |

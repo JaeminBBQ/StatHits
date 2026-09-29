@@ -27,6 +27,9 @@ Claude reviews the diff, re-runs the acceptance checks → done, or writes a fix
 ## Statuses
 `planned` (outline only) → `ready` (spec written) → `in-progress` → `review` (DeepSeek finished) → `done` (Claude verified; the user commits) or `rework` (a fix task was written). `blocked` = waiting on a question or the user.
 
+## Notifications
+Both agents ping the user on Discord via `python3 tools/notify.py` whenever a task finishes or the user's input is needed (details in CLAUDE.md / DEEPSEEK.md). Permission prompts are forwarded automatically by the hook in `.claude/settings.json`.
+
 ## Git
 The user runs all commits. After verifying a task, Claude gives the exact command, e.g. `git add -A && git commit -m "T001: scaffold and parsing"`. Neither agent commits.
 

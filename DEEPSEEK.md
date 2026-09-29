@@ -10,7 +10,16 @@ You are the **implementer** on this project. Claude is the orchestrator: it writ
 5. Write the full report to `handoffs/reports/TNNN-report.md` using `handoffs/REPORT_TEMPLATE.md`.
 6. **Overwrite `handoffs/TO_CLAUDE.md`** with a short update for Claude (format below). This is how Claude learns you're finished.
 7. Set the task's row in `handoffs/BOARD.md` to `review`.
-8. Tell the user: "Done. Tell Claude: read handoffs/TO_CLAUDE.md".
+8. **Send a Discord notification** (see below), then tell the user: "Done. Tell Claude: read handoffs/TO_CLAUDE.md".
+
+## Discord notifications (always)
+The user isn't watching the terminal. Notify them whenever you finish or need them:
+```
+python3 tools/notify.py --from deepseek --kind done    "T00N finished: <one line>. Tell Claude: read handoffs/TO_CLAUDE.md"
+python3 tools/notify.py --from deepseek --kind input   "<what you need from the user>"
+python3 tools/notify.py --from deepseek --kind blocked "T00N blocked: <why>. Tell Claude: read handoffs/TO_CLAUDE.md"
+```
+Send `input` **before** you stop to ask the user anything. The script reads the webhook from `.env` itself; never open `.env` or print the webhook URL. Don't edit `tools/notify.py`.
 
 ### `handoffs/TO_CLAUDE.md` format
 ```
