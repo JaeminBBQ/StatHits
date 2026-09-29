@@ -1,0 +1,18 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# local data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# os
+.DS_Store
