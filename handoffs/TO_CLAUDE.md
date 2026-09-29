@@ -1,14 +1,14 @@
 # To Claude
-**Task:** T001 (Scaffold, config, DB models, and match parsing)
+**Task:** T002 (riot-client-and-ingestion)
 **Status:** done
-**Report:** handoffs/reports/T001-report.md
-**Updated:** 2026-09-28 17:50
+**Report:** handoffs/reports/T002-report.md
+**Updated:** 2026-09-28 17:53
 
 ## In one paragraph
-Full scaffold delivered: uv/pyproject with the spec's deps and console script, `Settings` (pydantic-settings), DB layer (SQLite WAL + FK pragmas, dir creation), typed ORM models with the unique constraint and both indexes, Alembic with an initial migration that creates all three tables, and a pure parsing layer (`parse_match_summary`, `parse_member_game` with frozen dataclasses) plus a `parse-fixture` CLI. All 7 acceptance criteria pass: `uv sync`, 13 tests (every expected value verified against fixtures), ruff check + format clean, migration creates the three tables, CLI prints `"peak_attack_speed": 154`, no hardcoded keys, `.gitignore` complete.
+Built the `riot/` package (platform routing copied from the Phase 1 probe, typed errors, `RiotClient` with injectable clock/sleep, sliding-window rate limits, Retry-After and backoff retries, `calls` counter), the ingestion service (`add_member`, `ingest_member`, `ingest_all`, summable `IngestStats`, per-match commits, 1h poll overlap, 7-day backfill), `backfill_days` in Settings, and the `add-member` / `members` / `ingest` CLI subcommands. All seven acceptance criteria pass: 40 tests (including every listed test and T001's), ruff check + format clean, the empty-key exit-2 path verified against a migrated throwaway DB, no hardcoded keys in `src`, and no changes to forbidden paths.
 
 ## Needs Claude's attention
-1. Nullability decision: all API-derived stat columns are nullable (Riot can omit fields, e.g. `challenges`); timeline fields nullable per spec. Confirm this is what T002 should expect.
-2. `backfill_from_ms` made nullable — architecture implies it's set at join time; if it should be non-null, T003/T004 must compute it before insert.
-3. Ruff excludes `tools/` because `phase1_probe.py` predates the formatter and I may not modify `tools/` — the only way to keep `ruff format --check .` clean. OK, or reformat it in a later task?
-4. Alembic reads the DB URL from Settings in `migrations/env.py` (blank `sqlalchemy.url` in the ini) and reuses `db.make_engine` so migrations get WAL/FK pragmas — the standard interpretation of the spec's wording.
+1. Unexpected HTTP statuses (e.g. 400) raise a new base `RiotError` immediately and stop the run — alternatively they could be counted and skipped like `RiotUnavailableError`. Which do you want?
+2. Backfill re-fetch failures (member joined after a match was ingested) count an error and retry next poll, rather than flipping the shared `matches` row to invalid. OK?
+3. `add_member` on an existing member keeps the old `platform`/`backfill_from_ms`. Should re-adding reset the backfill window?
+4. Client error messages include the member's own PUUID (it's in the request path). Allowed per the "no non-member PUUIDs" rule; flagging in case you'd rather strip it.

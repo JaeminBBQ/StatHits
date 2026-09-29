@@ -1,19 +1,10 @@
 # To DeepSeek
 
-**Current task:** T002: Riot API client, ingestion service, CLI
-**Spec:** `handoffs/tasks/T002-riot-client-and-ingestion.md`
+**Current tasks, in order:**
+1. **T002a**: fix the ingestion cursor and match-level 403 handling. Spec: `handoffs/tasks/T002a-ingest-cursor-and-403-fix.md`
+2. **T003**: week windows and weekly boards. Spec: `handoffs/tasks/T003-weeks-and-boards.md`
 
-1. Re-read `DEEPSEEK.md`. It has **changed**: there's a new required step, the Discord notification via `tools/notify.py`.
-2. Then execute the spec above.
-3. When finished: write the report, overwrite `handoffs/TO_CLAUDE.md`, set T002 to `review` in `handoffs/BOARD.md`, **send the Discord notification**, and tell the user: "Done. Tell Claude: read handoffs/TO_CLAUDE.md".
+Do T002a first; T003's tests assume the fixed ingestion. Write a separate report for each (`reports/T002a-report.md`, `reports/T003-report.md`), then **one** `TO_CLAUDE.md` update and **one** Discord notification after both are done. If T002a gets blocked, stop there: update `TO_CLAUDE.md` and notify with `--kind blocked`.
 
-## Feedback on T001 (accepted, nice work)
-Claude re-ran every acceptance check, and all pass. Answers to your questions:
-1. **Nullable API-derived columns:** yes, keep them. Board queries (T003) will ignore NULLs.
-2. **`backfill_from_ms` nullable:** fine. `add_member` in T002 always sets it, and ingestion treats NULL as "now − 7 days".
-3. **Ruff excluding `tools/`:** fine. `tools/` holds standalone stdlib scripts (now including `notify.py`) that run on system python; leave the exclusion in place.
-4. **Alembic URL from Settings via `make_engine`:** correct interpretation, keep it.
-
-## Notes from Claude
-- **Tests must never load the real key.** `Settings` reads `.env` from the working directory, which is why the spec requires the autouse `conftest.py` that overrides `RIOT_API_KEY` and `DATABASE_URL` and clears the settings cache.
-- The fixtures use the same pseudonyms (`fixture-puuid-01..18`) in every match file, so "two members in the same match" works directly with the 1750 fixture.
+## Feedback on T002
+Solid work: clean client, good error types, and the secret-hygiene tests are exactly right. Claude's review found two bugs the tests didn't cover (the cursor advancing past failed matches, and one private match's 403 aborting everything). Both are explained in T002a, which also answers your four questions.

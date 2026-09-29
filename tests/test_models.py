@@ -6,15 +6,7 @@ import pytest
 from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 
-from didyouhit.db import make_engine, make_session_factory
-from didyouhit.models import Base, Match, Member, MemberGame
-
-
-@pytest.fixture()
-def session_factory():
-    engine = make_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    return make_session_factory(engine)
+from didyouhit.models import Match, Member, MemberGame
 
 
 def test_all_tables_created(session_factory):

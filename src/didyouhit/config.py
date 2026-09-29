@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     poll_interval_min: int = 15
     min_game_duration_s: int = 300
     rate_limits: str = "20:1,100:120"
+    backfill_days: int = 7
 
 
 @lru_cache

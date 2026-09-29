@@ -3,8 +3,9 @@
 | ID | Task | Owner | Status | Depends on |
 |---|---|---|---|---|
 | T001 | Scaffold, config, DB models + migration, pure parsing of match/timeline → records | DeepSeek | done | — |
-| T002 | Riot API client (rate limits, retries, routing) + ingestion service + CLI (`add-member`, `ingest`) | DeepSeek | ready | T001 |
-| T003 | Week windows + board definitions/queries + past-week winners | DeepSeek | planned | T001 |
+| T002 | Riot API client (rate limits, retries, routing) + ingestion service + CLI (`add-member`, `ingest`) | DeepSeek | rework → T002a | T001 |
+| T002a | Fix: poll cursor must not skip failed matches; a match-level 403 must not abort ingestion | DeepSeek | ready | T002 |
+| T003 | Week windows + board definitions/queries + past-week winners | DeepSeek | ready | T001, T002a |
 | T004 | Web UI: this week, past weeks, member page, join page, footer; background ingest loop | DeepSeek | planned | T002, T003 |
 | T005 | First live run with a real key; data sanity check against the user's games | Claude + user | planned | T002 |
 | T006 | Visual/browser review of the UI | User | planned | T004 |
